@@ -1,0 +1,245 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import pandas as pd\n",
+    "import numpy as np\n",
+    "import sklearn\n",
+    "import warnings\n",
+    "import math\n",
+    "from matplotlib import pyplot as plt\n",
+    "import seaborn as sns\n",
+    "from sklearn import metrics\n",
+    "from sklearn.linear_model import LogisticRegression\n",
+    "\n",
+    "import nltk\n",
+    "from nltk.corpus import stopwords\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import gzip\n",
+    "path = ('/Users/bryanevan/Downloads/reviews_Cell_Phones_and_Accessories_5.json.gz')\n",
+    "def parse(path):\n",
+    "  g = gzip.open(path, 'rb')\n",
+    "  for l in g:\n",
+    "    yield eval(l)\n",
+    "\n",
+    "def getDF(path):\n",
+    "  i = 0\n",
+    "  df = {}\n",
+    "  for d in parse(path):\n",
+    "    df[i] = d\n",
+    "    i += 1\n",
+    "  return pd.DataFrame.from_dict(df, orient='index')\n",
+    "\n",
+    "df = getDF(path)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "<matplotlib.axes._subplots.AxesSubplot at 0x1a2f4e0630>"
+      ]
+     },
+     "execution_count": 3,
+     "metadata": {},
+     "output_type": "execute_result"
+    },
+    {
+     "data": {
+      "image/png": "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\n",
+      "text/plain": [
+       "<Figure size 432x288 with 1 Axes>"
+      ]
+     },
+     "metadata": {
+      "needs_background": "light"
+     },
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "df['overall'].value_counts().plot(kind='bar', color='cornflowerblue')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df['reviewerName'].fillna('Amazon Customer', inplace=True);"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = df[df['overall'] != 3]\n",
+    "X = df['reviewText']\n",
+    "y_dict = {1:0, 2:0, 4:1, 5:1}\n",
+    "y = df['overall'].map(y_dict)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from sklearn.model_selection import train_test_split\n",
+    "X_train, X_test, y_train, y_test = train_test_split(X, \n",
+    "                                                   y,\n",
+    "                                                    train_size=.2,\n",
+    "                                                   test_size=.2, random_state=1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer\n",
+    "tfidf_ngrams = TfidfVectorizer(analyzer='word',stop_words='english', token_pattern=r'\\w{1,}', ngram_range=(1,2))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "# features: 2252230\n",
+      "# train records: 129750\n",
+      "# test records: 43250\n",
+      "Model Accuracy: 0.9208554913294797\n",
+      "\n",
+      "-Top 20 positive-\n",
+      "Word  Coefficient\n",
+      "    great    15.090906\n",
+      "     love    14.210002\n",
+      "  perfect    10.202905\n",
+      "    works     9.598531\n",
+      "perfectly     8.877400\n",
+      "     easy     8.850990\n",
+      "excellent     7.863668\n",
+      "     best     7.742256\n",
+      "     nice     7.451344\n",
+      "    loves     7.413180\n",
+      "     fits     6.861762\n",
+      "  awesome     6.792807\n",
+      "    price     6.530459\n",
+      "   little     6.084917\n",
+      "     good     5.773233\n",
+      "   highly     5.755291\n",
+      "  exactly     5.500827\n",
+      "      job     5.499339\n",
+      "      far     5.309968\n",
+      " protects     5.255179\n",
+      "\n",
+      "-Top 20 negative-\n",
+      "Word  Coefficient\n",
+      "      poorly    -5.659962\n",
+      "     2 stars    -5.919936\n",
+      "     started    -5.990719\n",
+      "        junk    -6.052167\n",
+      "       cheap    -6.127114\n",
+      "     stopped    -6.366790\n",
+      "    does fit    -6.475728\n",
+      "      refund    -6.597201\n",
+      "    terrible    -6.701048\n",
+      " t recommend    -6.846696\n",
+      "    horrible    -7.310005\n",
+      "       worst    -7.362959\n",
+      "   returning    -7.474121\n",
+      "       waste    -7.827284\n",
+      "       broke    -8.246136\n",
+      "     useless    -8.374304\n",
+      "    returned    -8.382882\n",
+      "        poor    -9.169699\n",
+      "disappointed    -9.338075\n",
+      "      return    -9.343330\n"
+     ]
+    }
+   ],
+   "source": [
+    "def text_fit(X, y, model,clf_model,coef_show=1):\n",
+    "    \n",
+    "    X_c = model.fit_transform(X)\n",
+    "    print('# features: {}'.format(X_c.shape[1]))\n",
+    "    X_train, X_test, y_train, y_test = train_test_split(X_c, y, random_state=0)\n",
+    "    print('# train records: {}'.format(X_train.shape[0]))\n",
+    "    print('# test records: {}'.format(X_test.shape[0]))\n",
+    "    clf = clf_model.fit(X_train, y_train)\n",
+    "    acc = clf.score(X_test, y_test)\n",
+    "    print ('Model Accuracy: {}'.format(acc))\n",
+    "    \n",
+    "    if coef_show == 1: \n",
+    "        w = model.get_feature_names()\n",
+    "        coef = clf.coef_.tolist()[0]\n",
+    "        coeff_df = pd.DataFrame({'Word' : w, 'Coefficient' : coef})\n",
+    "        coeff_df = coeff_df.sort_values(['Coefficient', 'Word'], ascending=[0, 1])\n",
+    "        print('')\n",
+    "        print('-Top 20 positive-')\n",
+    "        print(coeff_df.head(20).to_string(index=False))\n",
+    "        print('')\n",
+    "        print('-Top 20 negative-')        \n",
+    "        print(coeff_df.tail(20).to_string(index=False))\n",
+    "    \n",
+    "    \n",
+    "text_fit(X, y, tfidf_ngrams, LogisticRegression(random_state=0, multi_class='auto', solver='lbfgs', max_iter=400))\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "For the effort of classification, overall ratings in dataframe were separated by relevance: 3 was rendered neutral, while ratings of 1-2 and 4-5 were separated by binary to capture a more precise scope of 'favorable' and 'unfavorable' overall review. Tfidf with n_grams served to increase the relevance of words hosting sentiment. \n",
+    "Results: \n",
+    "Model proved to be fairly accurate with these parameters, 92%. Iteration limit was set to 200 for the sake of attaining convergence, and increasing iterations did not serve to increase accuracy, so it looks like we've hit a theshold for explaining variance with parameters as they are.\n",
+    "Resulting classification of words that reflect sentiment proved to be satisfactory, with no strange features coming up; thus, this model has proven to serve the effort of sentiment classification very well. Improvement of the model would perhaps be reflected by a Ridge regression, although I am skeptical that error reduction would help in any way at this point. Notice also that beta coefficients are far greater in positive reviews than in negative reviews, which we could have assumed given the distribution of the data is pretty overwhelmingly positive; thus, positive sentiment reviews were responsible for explaining lots of variance. I guess people are genuily happy with their Amazon purchases, which would explain the megalithic empire Amazon has mutated into. I give Jeff Bezos a 3.00."
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.2"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
